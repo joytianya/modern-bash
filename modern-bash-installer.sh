@@ -96,17 +96,206 @@ install_dependencies() {
     
     case "$PACKAGE_MANAGER" in
         "apt")
+            info "更新包管理器..."
             sudo apt update
-            sudo apt install -y curl git fzf zoxide exa bat ripgrep fd-find hstr tmux vim
+
+            # 安装基础工具
+            TOOLS_TO_INSTALL=""
+            for tool in curl git tmux vim; do
+                if ! command -v $tool &> /dev/null; then
+                    TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL $tool"
+                else
+                    info "$tool 已安装，跳过"
+                fi
+            done
+
+            # 检查特殊命名的工具
+            if ! command -v fzf &> /dev/null; then
+                TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL fzf"
+            else
+                info "fzf 已安装，跳过"
+            fi
+
+            if ! command -v zoxide &> /dev/null; then
+                TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL zoxide"
+            else
+                info "zoxide 已安装，跳过"
+            fi
+
+            if ! command -v exa &> /dev/null; then
+                TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL exa"
+            else
+                info "exa 已安装，跳过"
+            fi
+
+            if ! command -v bat &> /dev/null; then
+                TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL bat"
+            else
+                info "bat 已安装，跳过"
+            fi
+
+            if ! command -v rg &> /dev/null; then
+                TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL ripgrep"
+            else
+                info "ripgrep 已安装，跳过"
+            fi
+
+            if ! command -v fd &> /dev/null; then
+                TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL fd-find"
+            else
+                info "fd 已安装，跳过"
+            fi
+
+            if ! command -v hstr &> /dev/null; then
+                TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL hstr"
+            else
+                info "hstr 已安装，跳过"
+            fi
+
+            if [ -n "$TOOLS_TO_INSTALL" ]; then
+                info "安装工具: $TOOLS_TO_INSTALL"
+                sudo apt install -y $TOOLS_TO_INSTALL
+            else
+                info "所有工具都已安装，跳过 apt 安装"
+            fi
             ;;
         "yum")
-            sudo yum install -y curl git fzf zoxide exa bat ripgrep fd-find hstr tmux vim
+            # 安装基础工具
+            BASIC_TOOLS=""
+            for tool in curl git tmux vim unzip; do
+                if ! command -v $tool &> /dev/null; then
+                    BASIC_TOOLS="$BASIC_TOOLS $tool"
+                else
+                    info "$tool 已安装，跳过"
+                fi
+            done
+
+            if [ -n "$BASIC_TOOLS" ]; then
+                info "安装基础工具: $BASIC_TOOLS"
+                sudo yum install -y $BASIC_TOOLS
+            else
+                info "基础工具都已安装，跳过"
+            fi
+
+            # 尝试从EPEL安装fzf
+            if ! command -v fzf &> /dev/null; then
+                info "安装 fzf..."
+                sudo yum install -y epel-release 2>/dev/null || true
+                sudo yum install -y fzf 2>/dev/null || warning "fzf 安装失败，请手动安装"
+            else
+                info "fzf 已安装，跳过"
+            fi
+
+            # 创建本地bin目录
+            mkdir -p "$HOME/.local/bin"
+
+            # 安装 exa (现代化 ls)
+            if ! command -v exa &> /dev/null; then
+                info "安装 exa..."
+                if curl -L "https://github.com/ogham/exa/releases/download/v0.10.1/exa-linux-x86_64-v0.10.1.zip" -o /tmp/exa.zip; then
+                    unzip -q /tmp/exa.zip -d /tmp/
+                    mv /tmp/bin/exa "$HOME/.local/bin/"
+                    rm -rf /tmp/exa.zip /tmp/bin
+                    success "exa 安装成功"
+                else
+                    warning "exa 下载失败，跳过安装"
+                fi
+            else
+                info "exa 已安装，跳过"
+            fi
+
+            # 安装 bat (现代化 cat)
+            if ! command -v bat &> /dev/null; then
+                info "安装 bat..."
+                BAT_VERSION="0.24.0"
+                if curl -L "https://github.com/sharkdp/bat/releases/download/v${BAT_VERSION}/bat-v${BAT_VERSION}-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp/; then
+                    mv "/tmp/bat-v${BAT_VERSION}-x86_64-unknown-linux-musl/bat" "$HOME/.local/bin/"
+                    rm -rf "/tmp/bat-v${BAT_VERSION}-x86_64-unknown-linux-musl"
+                    success "bat 安装成功"
+                else
+                    warning "bat 下载失败，跳过安装"
+                fi
+            else
+                info "bat 已安装，跳过"
+            fi
+
+            # 安装 ripgrep (现代化 grep)
+            if ! command -v rg &> /dev/null; then
+                info "安装 ripgrep..."
+                RG_VERSION="14.1.0"
+                if curl -L "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep-${RG_VERSION}-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp/; then
+                    mv "/tmp/ripgrep-${RG_VERSION}-x86_64-unknown-linux-musl/rg" "$HOME/.local/bin/"
+                    rm -rf "/tmp/ripgrep-${RG_VERSION}-x86_64-unknown-linux-musl"
+                    success "ripgrep 安装成功"
+                else
+                    warning "ripgrep 下载失败，跳过安装"
+                fi
+            else
+                info "ripgrep 已安装，跳过"
+            fi
+
+            # 安装 fd (现代化 find)
+            if ! command -v fd &> /dev/null; then
+                info "安装 fd..."
+                FD_VERSION="10.1.0"
+                if curl -L "https://github.com/sharkdp/fd/releases/download/v${FD_VERSION}/fd-v${FD_VERSION}-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp/; then
+                    mv "/tmp/fd-v${FD_VERSION}-x86_64-unknown-linux-musl/fd" "$HOME/.local/bin/"
+                    rm -rf "/tmp/fd-v${FD_VERSION}-x86_64-unknown-linux-musl"
+                    success "fd 安装成功"
+                else
+                    warning "fd 下载失败，跳过安装"
+                fi
+            else
+                info "fd 已安装，跳过"
+            fi
+
+            # 安装 zoxide (智能目录跳转)
+            if ! command -v zoxide &> /dev/null; then
+                info "安装 zoxide..."
+                if curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash; then
+                    success "zoxide 安装成功"
+                else
+                    warning "zoxide 安装失败，跳过"
+                fi
+            else
+                info "zoxide 已安装，跳过"
+            fi
             ;;
         "pacman")
-            sudo pacman -S --noconfirm curl git fzf zoxide exa bat ripgrep fd hstr tmux vim
+            # 检查并安装工具
+            TOOLS_TO_INSTALL=""
+            for tool in curl git fzf zoxide exa bat ripgrep fd hstr tmux vim; do
+                if ! command -v $tool &> /dev/null; then
+                    TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL $tool"
+                else
+                    info "$tool 已安装，跳过"
+                fi
+            done
+
+            if [ -n "$TOOLS_TO_INSTALL" ]; then
+                info "安装工具: $TOOLS_TO_INSTALL"
+                sudo pacman -S --noconfirm $TOOLS_TO_INSTALL
+            else
+                info "所有工具都已安装，跳过 pacman 安装"
+            fi
             ;;
         "brew")
-            brew install curl git fzf zoxide exa bat ripgrep fd hstr tmux vim
+            # 检查并安装工具
+            TOOLS_TO_INSTALL=""
+            for tool in curl git fzf zoxide exa bat ripgrep fd hstr tmux vim; do
+                if ! command -v $tool &> /dev/null; then
+                    TOOLS_TO_INSTALL="$TOOLS_TO_INSTALL $tool"
+                else
+                    info "$tool 已安装，跳过"
+                fi
+            done
+
+            if [ -n "$TOOLS_TO_INSTALL" ]; then
+                info "安装工具: $TOOLS_TO_INSTALL"
+                brew install $TOOLS_TO_INSTALL
+            else
+                info "所有工具都已安装，跳过 brew 安装"
+            fi
             ;;
         *)
             warning "无法自动安装依赖，请手动安装以下工具:"
@@ -120,24 +309,55 @@ install_dependencies() {
             ;;
     esac
     
-    # 安装Starship (跨平台)
+    # 安装Starship (跨平台) - 安装到用户目录
     if ! command -v starship &> /dev/null; then
-        info "安装 Starship 终端提示符..."
-        curl -sS https://starship.rs/install.sh | sh -s -- -y
+        info "安装 Starship 终端提示符到用户目录..."
+        mkdir -p "$HOME/.local/bin"
+        if curl -sS https://starship.rs/install.sh | sh -s -- --bin-dir "$HOME/.local/bin" -y; then
+            success "Starship 安装成功"
+            # 添加到PATH
+            if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+                export PATH="$HOME/.local/bin:$PATH"
+            fi
+        else
+            warning "Starship 安装失败，跳过"
+        fi
+    else
+        info "Starship 已安装，跳过"
     fi
-    
-    # 安装McFly
+
+    # 安装McFly - 安装到用户目录
     if ! command -v mcfly &> /dev/null; then
-        info "安装 McFly 智能历史管理..."
-        curl -LSfs https://raw.githubusercontent.com/cantino/mcfly/master/ci/install.sh | sh -s -- --git cantino/mcfly
+        info "安装 McFly 智能历史管理到用户目录..."
+        mkdir -p "$HOME/.local/bin"
+        # 直接下载二进制文件
+        MCFLY_VERSION="v0.8.4"
+        if curl -L "https://github.com/cantino/mcfly/releases/download/${MCFLY_VERSION}/mcfly-${MCFLY_VERSION}-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C "$HOME/.local/bin" --strip-components=1; then
+            chmod +x "$HOME/.local/bin/mcfly"
+            success "McFly 安装成功"
+            # 添加到PATH
+            if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+                export PATH="$HOME/.local/bin:$PATH"
+            fi
+        else
+            warning "McFly 下载失败，跳过安装"
+        fi
+    else
+        info "McFly 已安装，跳过"
     fi
 }
 
 # 生成现代化配置
 generate_config() {
     info "生成现代化Bash配置..."
-    
+
     mkdir -p "$CONFIG_DIR"
+
+    # 检查配置文件是否已存在
+    if [ -f "$CONFIG_DIR/modern-config.sh" ]; then
+        info "现代化配置文件已存在，跳过生成"
+        return 0
+    fi
     
     # 生成主配置文件
     cat > "$CONFIG_DIR/modern-config.sh" << 'EOF'
@@ -146,6 +366,11 @@ generate_config() {
 # 现代化Shell配置
 
 # ============ 基础配置 ============
+
+# 添加用户本地bin目录到PATH
+if [ -d "$HOME/.local/bin" ] && ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+    export PATH="$HOME/.local/bin:$PATH"
+fi
 
 # 启用别名扩展
 shopt -s expand_aliases
@@ -427,8 +652,14 @@ EOF
 # 生成Starship配置
 generate_starship_config() {
     info "生成 Starship 配置..."
-    
+
     mkdir -p "$HOME/.config"
+
+    # 检查配置文件是否已存在
+    if [ -f "$HOME/.config/starship.toml" ]; then
+        info "Starship 配置文件已存在，跳过生成"
+        return 0
+    fi
     cat > "$HOME/.config/starship.toml" << 'EOF'
 # Starship 配置文件
 
