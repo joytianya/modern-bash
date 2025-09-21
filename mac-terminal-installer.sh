@@ -236,7 +236,14 @@ export LSCOLORS=ExFxBxDxCxegedabagacad
 
 # 设置 UTF-8 编码
 export LANG=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
+# 检查并设置 LC_ALL（避免在不支持的系统上出错）
+if locale -a 2>/dev/null | grep -q "en_US.UTF-8"; then
+    export LC_ALL=en_US.UTF-8
+elif locale -a 2>/dev/null | grep -q "en_US.utf8"; then
+    export LC_ALL=en_US.utf8
+else
+    export LC_ALL=C.UTF-8
+fi
 
 # ============ 现代化工具配置 ============
 
@@ -603,7 +610,7 @@ $git_status\
 $nodejs\
 $python\
 $rust\
-$go\
+$golang\
 $java\
 $docker_context\
 $cmd_duration
@@ -665,7 +672,7 @@ style = "bold yellow"
 symbol = "🦀 "
 style = "bold red"
 
-[go]
+[golang]
 symbol = "🐹 "
 style = "bold cyan"
 
