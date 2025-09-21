@@ -174,8 +174,11 @@ install_mac_tools() {
     # 安装 McFly
     if ! command -v mcfly &> /dev/null; then
         info "安装 McFly 智能历史管理..."
-        brew install mcfly
-        success "McFly 安装成功"
+        if brew install mcfly 2>/dev/null; then
+            success "McFly 安装成功"
+        else
+            warning "McFly 安装失败，请检查 Homebrew 或手动安装"
+        fi
     else
         info "McFly 已安装，跳过"
     fi

@@ -380,6 +380,40 @@ install_with_brew() {
     brew install --cask font-fira-code-nerd-font 2>/dev/null || warning "字体安装失败，不影响主要功能"
 }
 
+# 通过包管理器安装工具 (回退方案)
+install_via_package_manager() {
+    local tool_name="$1"
+    info "尝试通过包管理器安装 $tool_name..."
+
+    case "$OS_TYPE" in
+        "ubuntu"|"debian")
+            if command -v apt &> /dev/null; then
+                sudo apt update && sudo apt install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
+            fi
+            ;;
+        "centos"|"rhel"|"fedora")
+            if command -v dnf &> /dev/null; then
+                sudo dnf install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
+            elif command -v yum &> /dev/null; then
+                sudo yum install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
+            fi
+            ;;
+        "arch")
+            if command -v pacman &> /dev/null; then
+                sudo pacman -S --noconfirm "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
+            fi
+            ;;
+        "opensuse")
+            if command -v zypper &> /dev/null; then
+                sudo zypper install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
+            fi
+            ;;
+        *)
+            warning "未知系统类型，无法通过包管理器安装 $tool_name"
+            ;;
+    esac
+}
+
 # Linux 手动安装工具
 install_manual_tools_linux() {
     mkdir -p "$HOME/.local/bin"
@@ -463,16 +497,40 @@ install_cross_platform_tools() {
     if ! command -v mcfly &> /dev/null; then
         info "安装 McFly 智能历史管理..."
         if [[ "$OS" == "macos" ]]; then
-            brew install mcfly
+            if brew install mcfly 2>/dev/null; then
+                success "McFly 安装成功"
+            else
+                warning "McFly 安装失败，请检查 Homebrew"
+            fi
         else
             mkdir -p "$HOME/.local/bin"
             MCFLY_VERSION="v0.8.4"
-            if curl -L "https://github.com/cantino/mcfly/releases/download/${MCFLY_VERSION}/mcfly-${MCFLY_VERSION}-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C "$HOME/.local/bin" --strip-components=1 2>/dev/null; then
-                chmod +x "$HOME/.local/bin/mcfly"
-                success "McFly 安装成功"
+            TEMP_DIR=$(mktemp -d)
+
+            # 下载并解压到临时目录
+            if curl -L "https://github.com/cantino/mcfly/releases/download/${MCFLY_VERSION}/mcfly-${MCFLY_VERSION}-x86_64-unknown-linux-musl.tar.gz" -o "${TEMP_DIR}/mcfly.tar.gz" 2>/dev/null; then
+                if tar -xzf "${TEMP_DIR}/mcfly.tar.gz" -C "${TEMP_DIR}" 2>/dev/null; then
+                    # 查找解压后的 mcfly 二进制文件
+                    MCFLY_BIN=$(find "${TEMP_DIR}" -name "mcfly" -type f -executable 2>/dev/null | head -1)
+                    if [[ -n "$MCFLY_BIN" && -x "$MCFLY_BIN" ]]; then
+                        cp "$MCFLY_BIN" "$HOME/.local/bin/mcfly"
+                        chmod +x "$HOME/.local/bin/mcfly"
+                        success "McFly 安装成功"
+                    else
+                        warning "McFly 二进制文件未找到，尝试包管理器安装"
+                        install_via_package_manager "mcfly"
+                    fi
+                else
+                    warning "McFly 解压失败，尝试包管理器安装"
+                    install_via_package_manager "mcfly"
+                fi
             else
-                warning "McFly 下载失败"
+                warning "McFly 下载失败，尝试包管理器安装"
+                install_via_package_manager "mcfly"
             fi
+
+            # 清理临时目录
+            rm -rf "${TEMP_DIR}"
         fi
     fi
 }
