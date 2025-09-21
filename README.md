@@ -4,16 +4,29 @@
 
 ## 快速开始
 
+### 通用安装器 (推荐)
 ```bash
-# 下载并运行安装脚本
-curl -O https://raw.githubusercontent.com/your-repo/modern-bash-installer.sh
-chmod +x modern-bash-installer.sh
-./modern-bash-installer.sh
+# 下载并运行通用安装器
+curl -O https://raw.githubusercontent.com/joytianya/modern-bash/main/universal-installer.sh
+chmod +x universal-installer.sh
+./universal-installer.sh
 ```
 
-或者直接运行：
+### macOS Terminal.app 专用安装器
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/your-repo/modern-bash-installer.sh)
+# 针对 macOS Terminal.app 优化的安装器
+curl -O https://raw.githubusercontent.com/joytianya/modern-bash/main/mac-terminal-installer.sh
+chmod +x mac-terminal-installer.sh
+./mac-terminal-installer.sh
+```
+
+### 在线一键安装
+```bash
+# 通用版本
+bash <(curl -s https://raw.githubusercontent.com/joytianya/modern-bash/main/universal-installer.sh)
+
+# macOS Terminal.app 版本
+bash <(curl -s https://raw.githubusercontent.com/joytianya/modern-bash/main/mac-terminal-installer.sh)
 ```
 
 ## 功能特性
@@ -74,21 +87,40 @@ search_history      # 搜索命令历史
 
 ## 安装选项
 
+### 通用安装器选项
 ```bash
 # 完整安装 (默认)
-./modern-bash-installer.sh install
+./universal-installer.sh install
 
 # 仅创建备份
-./modern-bash-installer.sh backup
+./universal-installer.sh backup
 
 # 卸载并恢复
-./modern-bash-installer.sh uninstall
+./universal-installer.sh uninstall
+```
+
+### macOS Terminal.app 安装器选项
+```bash
+# 完整安装 (默认)
+./mac-terminal-installer.sh install
+
+# 仅创建备份
+./mac-terminal-installer.sh backup
+
+# 卸载并恢复
+./mac-terminal-installer.sh uninstall
 ```
 
 ## 支持的系统
 
+### Shell 环境支持
+- **bash**: 完全支持
+- **zsh**: 完全支持
+- **fish**: 基础支持
+
+### 操作系统支持
 - **Linux**: Ubuntu, Debian, CentOS, Arch Linux
-- **macOS**: 通过 Homebrew
+- **macOS**: 通过 Homebrew (提供专用安装器)
 - **其他**: 手动安装模式
 
 ## 安装内容
@@ -111,8 +143,14 @@ search_history      # 搜索命令历史
 
 ## 卸载
 
+### 通用安装器卸载
 ```bash
-./modern-bash-installer.sh uninstall
+./universal-installer.sh uninstall
+```
+
+### macOS Terminal.app 安装器卸载
+```bash
+./mac-terminal-installer.sh uninstall
 ```
 
 这将：
@@ -131,7 +169,11 @@ search_history      # 搜索命令历史
 
 ### 权限问题
 ```bash
-chmod +x modern-bash-installer.sh
+# 通用安装器
+chmod +x universal-installer.sh
+
+# macOS Terminal.app 安装器
+chmod +x mac-terminal-installer.sh
 ```
 
 ### 工具未找到
@@ -139,7 +181,12 @@ chmod +x modern-bash-installer.sh
 
 ### 配置不生效
 ```bash
+# bash 用户
 source ~/.bashrc
+
+# zsh 用户
+source ~/.zshrc
+
 # 或重启终端
 ```
 
