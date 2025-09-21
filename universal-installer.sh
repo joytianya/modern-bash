@@ -135,6 +135,23 @@ install_homebrew() {
     fi
 }
 
+# 检查用户权限
+check_sudo_privileges() {
+    if [[ $EUID -eq 0 ]]; then
+        # 以root身份运行
+        return 0
+    fi
+    
+    # 检查sudo权限
+    if ! sudo -n true 2>/dev/null; then
+        warning "检测到没有sudo权限，将使用用户模式安装"
+        info "某些功能可能需要手动安装，或者您可以重新以sudo权限运行此脚本"
+        return 1
+    fi
+    
+    return 0
+}
+
 # 检查系统依赖
 check_dependencies() {
     info "检查系统依赖..."
@@ -157,16 +174,24 @@ check_dependencies() {
             fi
             ;;
         "linux")
-            # Linux 系统依赖检查
-            if [[ "$PACKAGE_MANAGER" == "apt" ]]; then
-                info "更新 APT 包索引..."
-                sudo apt update
-            elif [[ "$PACKAGE_MANAGER" == "yum" ]]; then
-                info "更新 YUM 包索引..."
-                sudo yum check-update || true
-            elif [[ "$PACKAGE_MANAGER" == "dnf" ]]; then
-                info "更新 DNF 包索引..."
-                sudo dnf check-update || true
+            # 检查sudo权限
+            if check_sudo_privileges; then
+                # 有sudo权限时更新包索引
+                if [[ "$PACKAGE_MANAGER" == "apt" ]]; then
+                    info "更新 APT 包索引..."
+                    if ! sudo apt update 2>/dev/null; then
+                        warning "包索引更新失败，将尝试用户模式安装"
+                    fi
+                elif [[ "$PACKAGE_MANAGER" == "yum" ]]; then
+                    info "更新 YUM 包索引..."
+                    sudo yum check-update 2>/dev/null || true
+                elif [[ "$PACKAGE_MANAGER" == "dnf" ]]; then
+                    info "更新 DNF 包索引..."
+                    sudo dnf check-update 2>/dev/null || true
+                fi
+            else
+                warning "没有sudo权限，跳过系统包索引更新"
+                info "将优先使用用户空间安装方式"
             fi
             ;;
     esac
@@ -278,8 +303,17 @@ install_with_apt() {
     fi
 
     if [ -n "$tools_to_install" ]; then
-        info "安装工具: $tools_to_install"
-        sudo apt install -y $tools_to_install
+        # 检查sudo权限
+        if check_sudo_privileges; then
+            info "安装工具: $tools_to_install"
+            if ! sudo apt install -y $tools_to_install 2>/dev/null; then
+                warning "部分工具通过APT安装失败，将使用手动安装方式"
+                install_manual_tools_linux
+            fi
+        else
+            warning "没有sudo权限，无法使用APT安装，将使用手动安装方式"
+            install_manual_tools_linux
+        fi
     fi
 }
 
@@ -288,26 +322,33 @@ install_with_yum_dnf() {
     local cmd="$PACKAGE_MANAGER"
     info "使用 $cmd 安装工具..."
 
-    # 安装 EPEL (如果是 RHEL/CentOS)
-    if [[ "$PACKAGE_MANAGER" == "yum" ]]; then
-        sudo yum install -y epel-release 2>/dev/null || true
-    fi
-
-    # 基础工具
-    local basic_tools=""
-    for tool in curl git tmux vim unzip tar; do
-        if ! command -v $tool &> /dev/null; then
-            basic_tools="$basic_tools $tool"
+    # 检查sudo权限
+    if check_sudo_privileges; then
+        # 安装 EPEL (如果是 RHEL/CentOS)
+        if [[ "$PACKAGE_MANAGER" == "yum" ]]; then
+            sudo yum install -y epel-release 2>/dev/null || true
         fi
-    done
 
-    if [ -n "$basic_tools" ]; then
-        sudo $cmd install -y $basic_tools
-    fi
+        # 基础工具
+        local basic_tools=""
+        for tool in curl git tmux vim unzip tar; do
+            if ! command -v $tool &> /dev/null; then
+                basic_tools="$basic_tools $tool"
+            fi
+        done
 
-    # 安装可用的现代化工具
-    if ! command -v fzf &> /dev/null; then
-        sudo $cmd install -y fzf 2>/dev/null || warning "fzf 需要手动安装"
+        if [ -n "$basic_tools" ]; then
+            if ! sudo $cmd install -y $basic_tools 2>/dev/null; then
+                warning "部分基础工具安装失败"
+            fi
+        fi
+
+        # 安装可用的现代化工具
+        if ! command -v fzf &> /dev/null; then
+            sudo $cmd install -y fzf 2>/dev/null || warning "fzf 需要手动安装"
+        fi
+    else
+        warning "没有sudo权限，无法使用 $cmd 安装，将使用手动安装方式"
     fi
 
     # 其他工具需要手动安装
@@ -326,7 +367,15 @@ install_with_pacman() {
     done
 
     if [ -n "$tools_to_install" ]; then
-        sudo pacman -S --noconfirm $tools_to_install
+        if check_sudo_privileges; then
+            if ! sudo pacman -S --noconfirm $tools_to_install 2>/dev/null; then
+                warning "部分工具通过Pacman安装失败，将使用手动安装方式"
+                install_manual_tools_linux
+            fi
+        else
+            warning "没有sudo权限，无法使用Pacman安装，将使用手动安装方式"
+            install_manual_tools_linux
+        fi
     fi
 }
 
@@ -342,7 +391,13 @@ install_with_zypper() {
     done
 
     if [ -n "$tools_to_install" ]; then
-        sudo zypper install -y $tools_to_install
+        if check_sudo_privileges; then
+            if ! sudo zypper install -y $tools_to_install 2>/dev/null; then
+                warning "部分工具通过Zypper安装失败，将使用手动安装方式"
+            fi
+        else
+            warning "没有sudo权限，无法使用Zypper安装，将使用手动安装方式"
+        fi
     fi
 
     # 其他工具需要手动安装
@@ -385,31 +440,30 @@ install_via_package_manager() {
     local tool_name="$1"
     info "尝试通过包管理器安装 $tool_name..."
 
-    case "$OS_TYPE" in
-        "ubuntu"|"debian")
-            if command -v apt &> /dev/null; then
-                sudo apt update && sudo apt install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
-            fi
+    # 检查sudo权限
+    if ! check_sudo_privileges; then
+        warning "没有sudo权限，无法通过包管理器安装 $tool_name"
+        return 1
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        "apt")
+            sudo apt install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
             ;;
-        "centos"|"rhel"|"fedora")
-            if command -v dnf &> /dev/null; then
-                sudo dnf install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
-            elif command -v yum &> /dev/null; then
-                sudo yum install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
-            fi
+        "dnf")
+            sudo dnf install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
             ;;
-        "arch")
-            if command -v pacman &> /dev/null; then
-                sudo pacman -S --noconfirm "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
-            fi
+        "yum")
+            sudo yum install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
             ;;
-        "opensuse")
-            if command -v zypper &> /dev/null; then
-                sudo zypper install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
-            fi
+        "pacman")
+            sudo pacman -S --noconfirm "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
+            ;;
+        "zypper")
+            sudo zypper install -y "$tool_name" 2>/dev/null || warning "$tool_name 包管理器安装失败"
             ;;
         *)
-            warning "未知系统类型，无法通过包管理器安装 $tool_name"
+            warning "未知包管理器，无法安装 $tool_name"
             ;;
     esac
 }
@@ -719,7 +773,7 @@ elif command -v exa &> /dev/null; then
     alias lh='exa -la --icons --group-directories-first --git'
     alias lta='exa --tree --level=3 --icons'
 else
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         alias ls='ls -G'
         alias ll='ls -alFG'
         alias la='ls -AG'
@@ -920,7 +974,7 @@ dirsize() {
 # 端口检查
 port() {
     if [ -n "$1" ]; then
-        if [[ "$OS_TYPE" == "macos" ]]; then
+        if [[ "$OS" == "macos" ]]; then
             lsof -i ":$1"
         else
             netstat -tulpn | grep ":$1"
@@ -945,7 +999,7 @@ serve() {
 # 系统信息
 sysinfo() {
     echo -e "\033[0;32m🖥️  系统信息\033[0m"
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         echo "操作系统: $(sw_vers -productName) $(sw_vers -productVersion)"
         echo "处理器: $(sysctl -n machdep.cpu.brand_string)"
         echo "内存: $(sysctl -n hw.memsize | awk '{print $1/1024/1024/1024 " GB"}')"
@@ -967,7 +1021,7 @@ show_tools() {
     echo -e "\033[0;34m🔍 文件搜索:\033[0m Ctrl+T (文件), Alt+C (目录), Ctrl+R (历史)"
     echo -e "\033[0;34m📋 文件查看:\033[0m ll (详细列表), cat (语法高亮), grep (高级搜索)"
     echo -e "\033[0;34m⚡ 实用函数:\033[0m mkcd, extract, ff (查找文件), sysinfo, backup"
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         echo -e "\033[0;35m🍎 Mac 特定:\033[0m flushdns, showfiles, hidefiles, brewup, battery"
     fi
     echo -e "\033[0;34m🎨 终端美化:\033[0m Starship 提示符, 彩色输出"
@@ -1031,7 +1085,7 @@ EOF
 update_shell_config() {
     info "更新Shell配置文件..."
 
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         # Mac 使用 .bash_profile
         touch "$HOME/.bash_profile"
         if ! grep -q "Universal Modern Shell Configuration" "$HOME/.bash_profile"; then
@@ -1228,12 +1282,12 @@ show_result() {
     success "🎉 跨平台现代化Bash配置安装完成！"
     success "=========================================="
     echo
-    info "检测到的系统: $OS_TYPE ($PACKAGE_MANAGER)"
+    info "检测到的系统: $OS ($PACKAGE_MANAGER)"
     echo
     info "安装的工具和功能："
     echo "✅ 智能系统检测和适配"
 
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         echo "✅ Homebrew 包管理器支持"
         echo "✅ Apple Silicon & Intel Mac 适配"
         echo "✅ Nerd 字体支持"
@@ -1246,7 +1300,7 @@ show_result() {
     echo "✅ 历史增强 (mcfly)"
     echo "✅ 美化提示符 (starship)"
 
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         echo "✅ 系统监控 (htop, procs, dust)"
         echo "✅ Mac 特定功能和别名"
     fi
@@ -1263,7 +1317,7 @@ show_result() {
     echo
     warning "请运行以下命令应用新配置："
 
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         echo "source ~/.bash_profile"
     else
         echo "source ~/.bashrc"
@@ -1288,7 +1342,7 @@ uninstall() {
     if [[ -d "$RESTORE_DIR" ]]; then
         info "恢复配置备份..."
         local files_to_restore
-        if [[ "$OS_TYPE" == "macos" ]]; then
+        if [[ "$OS" == "macos" ]]; then
             files_to_restore=(".bashrc" ".bash_aliases" ".bash_profile" ".profile" ".inputrc" ".dircolors" ".zshrc")
         else
             files_to_restore=(".bashrc" ".bash_aliases" ".bash_profile" ".profile" ".inputrc" ".dircolors")
@@ -1327,7 +1381,7 @@ test_compatibility() {
     echo "操作系统: $OS_TYPE"
     echo "包管理器: $PACKAGE_MANAGER"
 
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         echo "Mac架构: $MAC_ARCH"
     fi
 
@@ -1335,7 +1389,7 @@ test_compatibility() {
     echo -e "${CYAN}工具检查:${NC}"
 
     local tools=("curl" "git" "fzf" "zoxide" "bat" "rg" "fd" "starship" "mcfly")
-    if [[ "$OS_TYPE" == "macos" ]]; then
+    if [[ "$OS" == "macos" ]]; then
         tools+=("exa" "eza" "htop" "tree" "jq" "procs" "dust")
     else
         tools+=("exa")
