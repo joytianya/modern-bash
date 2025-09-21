@@ -1150,7 +1150,7 @@ generate_universal_starship_config() {
 format = """
 [╭─user───❯](bold blue) $os\
 $username\
-[@ ](bold blue)\
+[@](bold blue)\
 $hostname\
 [ in ](bold blue)\
 $directory\
