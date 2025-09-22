@@ -108,6 +108,50 @@ detect_system() {
     success "系统检测完成: $OS ($PACKAGE_MANAGER)"
 }
 
+# 设置hostname为外网IP
+setup_hostname_as_ip() {
+    info "检测外网IP并设置为hostname..."
+
+    # 获取外网IP
+    EXTERNAL_IP=""
+    if command -v curl >/dev/null 2>&1; then
+        EXTERNAL_IP=$(curl -s --connect-timeout 10 ifconfig.me 2>/dev/null || curl -s --connect-timeout 10 ipinfo.io/ip 2>/dev/null)
+    elif command -v wget >/dev/null 2>&1; then
+        EXTERNAL_IP=$(wget -qO- --timeout=10 ifconfig.me 2>/dev/null || wget -qO- --timeout=10 ipinfo.io/ip 2>/dev/null)
+    fi
+
+    if [[ -n "$EXTERNAL_IP" && "$EXTERNAL_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        info "检测到外网IP: $EXTERNAL_IP"
+
+        # 询问用户是否要设置hostname为IP
+        echo -e "${YELLOW}是否将hostname设置为外网IP ($EXTERNAL_IP)? (y/N)${NC}"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            if [[ "$OS" == "macos" ]]; then
+                sudo scutil --set HostName "$EXTERNAL_IP"
+                sudo scutil --set LocalHostName "$EXTERNAL_IP"
+                sudo scutil --set ComputerName "$EXTERNAL_IP"
+                success "macOS hostname已设置为: $EXTERNAL_IP"
+            else
+                # Linux系统
+                if sudo hostnamectl set-hostname "$EXTERNAL_IP" 2>/dev/null; then
+                    # 更新/etc/hosts文件
+                    if ! grep -q "127.0.0.1 $EXTERNAL_IP" /etc/hosts 2>/dev/null; then
+                        echo "127.0.0.1 $EXTERNAL_IP" | sudo tee -a /etc/hosts >/dev/null
+                    fi
+                    success "Linux hostname已设置为: $EXTERNAL_IP"
+                else
+                    warning "无法设置hostname，可能需要管理员权限"
+                fi
+            fi
+        else
+            info "跳过hostname设置"
+        fi
+    else
+        warning "无法获取有效的外网IP地址，跳过hostname设置"
+    fi
+}
+
 # 安装 Homebrew (仅 macOS)
 install_homebrew() {
     if [[ "$OS" != "macos" ]]; then
@@ -1192,6 +1236,7 @@ show_always = true
 ssh_only = false
 format = "[$hostname](bold red)"
 disabled = false
+trim_at = ""
 
 [directory]
 truncation_length = 3
@@ -1466,6 +1511,7 @@ main() {
     case "${1:-install}" in
         "install")
             detect_system
+            setup_hostname_as_ip
             check_dependencies
             create_backup
             install_universal_tools

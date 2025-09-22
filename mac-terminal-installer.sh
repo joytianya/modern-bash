@@ -75,6 +75,35 @@ check_mac_system() {
     fi
 }
 
+# 设置hostname为外网IP (Mac版本)
+setup_hostname_as_ip() {
+    info "检测外网IP并设置为hostname..."
+
+    # 获取外网IP
+    EXTERNAL_IP=""
+    if command -v curl >/dev/null 2>&1; then
+        EXTERNAL_IP=$(curl -s --connect-timeout 10 ifconfig.me 2>/dev/null || curl -s --connect-timeout 10 ipinfo.io/ip 2>/dev/null)
+    fi
+
+    if [[ -n "$EXTERNAL_IP" && "$EXTERNAL_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        info "检测到外网IP: $EXTERNAL_IP"
+
+        # 询问用户是否要设置hostname为IP
+        echo -e "${YELLOW}是否将hostname设置为外网IP ($EXTERNAL_IP)? (y/N)${NC}"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            sudo scutil --set HostName "$EXTERNAL_IP"
+            sudo scutil --set LocalHostName "$EXTERNAL_IP"
+            sudo scutil --set ComputerName "$EXTERNAL_IP"
+            success "macOS hostname已设置为: $EXTERNAL_IP"
+        else
+            info "跳过hostname设置"
+        fi
+    else
+        warning "无法获取有效的外网IP地址，跳过hostname设置"
+    fi
+}
+
 # 安装 Homebrew
 install_homebrew() {
     info "正在安装 Homebrew..."
@@ -634,6 +663,7 @@ show_always = true
 ssh_only = false
 format = "[$hostname](bold red)"
 disabled = false
+trim_at = ""
 
 [directory]
 truncation_length = 3
@@ -800,6 +830,7 @@ main() {
     case "${1:-install}" in
         "install")
             check_mac_system
+            setup_hostname_as_ip
             create_backup
             install_mac_tools
             generate_mac_config
