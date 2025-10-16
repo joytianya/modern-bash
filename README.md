@@ -114,8 +114,8 @@ search_history      # 搜索命令历史
 ## 支持的系统
 
 ### Shell 环境支持
-- **bash**: 完全支持
-- **zsh**: 完全支持
+- **bash**: 完全支持（所有功能）
+- **zsh**: 完全支持（自动适配，McFly 除外）
 - **fish**: 基础支持
 
 ### 操作系统支持
@@ -164,6 +164,30 @@ search_history      # 搜索命令历史
 - 添加个人别名
 - 修改工具配置
 - 调整颜色主题
+
+## 更新配置
+
+如果你已经安装过，想要更新到最新版本的配置文件，可以使用以下一键命令：
+
+### 更新通用配置
+```bash
+rm ~/.config/shell/universal-config.sh && curl -fsSL https://raw.githubusercontent.com/joytianya/modern-bash/main/universal-installer.sh | bash
+```
+
+### 更新 macOS 配置
+```bash
+rm ~/.config/shell/modern-config-mac.sh && curl -fsSL https://raw.githubusercontent.com/joytianya/modern-bash/main/mac-terminal-installer.sh | bash
+```
+
+更新后，重新加载配置：
+```bash
+# bash 用户
+source ~/.bash_profile  # macOS
+source ~/.bashrc        # Linux
+
+# zsh 用户
+source ~/.zshrc
+```
 
 ## 故障排除
 
