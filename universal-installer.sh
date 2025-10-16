@@ -661,6 +661,14 @@ generate_universal_config() {
 # Universal Modern Shell Configuration
 # 跨平台现代化Shell配置
 
+# ============ Shell 类型检测 ============
+CURRENT_SHELL="bash"
+if [ -n "$ZSH_VERSION" ]; then
+    CURRENT_SHELL="zsh"
+elif [ -n "$BASH_VERSION" ]; then
+    CURRENT_SHELL="bash"
+fi
+
 # ============ 系统检测 ============
 OS_TYPE="unknown"
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -691,17 +699,22 @@ if [[ "$OS_TYPE" == "macos" ]]; then
     fi
 fi
 
-# 启用别名扩展
-shopt -s expand_aliases
+# Bash 特定配置
+if [[ "$CURRENT_SHELL" == "bash" ]]; then
+    # 启用别名扩展
+    shopt -s expand_aliases
 
-# 历史配置优化
+    # 历史配置优化
+    shopt -s histappend
+    shopt -s checkwinsize
+    shopt -s histverify
+fi
+
+# 通用历史配置
 HISTSIZE=50000
 HISTFILESIZE=100000
 HISTCONTROL=ignoredups:ignorespace:erasedups
 HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "
-shopt -s histappend
-shopt -s checkwinsize
-shopt -s histverify
 
 # ============ 颜色支持 ============
 
@@ -760,25 +773,38 @@ else
     export FZF_ALT_C_COMMAND='find . -type d'
 fi
 
-# 加载FZF键绑定
-if [[ "$OS_TYPE" == "macos" ]] && [[ -f "$(brew --prefix)/opt/fzf/shell/key-bindings.bash" ]]; then
-    source "$(brew --prefix)/opt/fzf/shell/key-bindings.bash"
-    source "$(brew --prefix)/opt/fzf/shell/completion.bash"
-elif [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
-    source /usr/share/doc/fzf/examples/key-bindings.bash
-elif [ -f /usr/share/fzf/key-bindings.bash ]; then
-    source /usr/share/fzf/key-bindings.bash
-elif [ -f ~/.fzf.bash ]; then
-    source ~/.fzf.bash
+# 加载FZF键绑定 (根据 shell 类型)
+if [[ "$CURRENT_SHELL" == "bash" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]] && [[ -f "$(brew --prefix)/opt/fzf/shell/key-bindings.bash" ]]; then
+        source "$(brew --prefix)/opt/fzf/shell/key-bindings.bash"
+        source "$(brew --prefix)/opt/fzf/shell/completion.bash"
+    elif [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+        source /usr/share/doc/fzf/examples/key-bindings.bash
+    elif [ -f /usr/share/fzf/key-bindings.bash ]; then
+        source /usr/share/fzf/key-bindings.bash
+    elif [ -f ~/.fzf.bash ]; then
+        source ~/.fzf.bash
+    fi
+elif [[ "$CURRENT_SHELL" == "zsh" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]] && [[ -f "$(brew --prefix)/opt/fzf/shell/key-bindings.zsh" ]]; then
+        source "$(brew --prefix)/opt/fzf/shell/key-bindings.zsh"
+        source "$(brew --prefix)/opt/fzf/shell/completion.zsh"
+    elif [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
+        source /usr/share/doc/fzf/examples/key-bindings.zsh
+    elif [ -f /usr/share/fzf/key-bindings.zsh ]; then
+        source /usr/share/fzf/key-bindings.zsh
+    elif [ -f ~/.fzf.zsh ]; then
+        source ~/.fzf.zsh
+    fi
 fi
 
 # Zoxide - 智能目录跳转
 if command -v zoxide &> /dev/null; then
-    eval "$(zoxide init bash)"
+    eval "$(zoxide init $CURRENT_SHELL)"
 fi
 
-# McFly - 智能历史管理
-if command -v mcfly &> /dev/null; then
+# McFly - 智能历史管理 (仅 Bash 支持)
+if [[ "$CURRENT_SHELL" == "bash" ]] && command -v mcfly &> /dev/null; then
     eval "$(mcfly init bash)"
     export MCFLY_KEY_SCHEME=vim
     export MCFLY_FUZZY=2
@@ -788,7 +814,7 @@ fi
 
 # Starship - 美化终端提示符
 if command -v starship &> /dev/null; then
-    eval "$(starship init bash)"
+    eval "$(starship init $CURRENT_SHELL)"
 fi
 
 # ============ 智能别名系统 ============
@@ -1129,7 +1155,7 @@ update_shell_config() {
     info "更新Shell配置文件..."
 
     if [[ "$OS" == "macos" ]]; then
-        # Mac 使用 .bash_profile
+        # Mac 使用 .bash_profile 和 .zshrc
         touch "$HOME/.bash_profile"
         if ! grep -q "Universal Modern Shell Configuration" "$HOME/.bash_profile"; then
             cat >> "$HOME/.bash_profile" << 'EOF'
@@ -1152,6 +1178,26 @@ EOF
             success "已将现代化配置添加到 .bash_profile"
         else
             info ".bash_profile 已包含现代化配置，跳过更新"
+        fi
+
+        # 同时配置 .zshrc
+        touch "$HOME/.zshrc"
+        if ! grep -q "Universal Modern Shell Configuration" "$HOME/.zshrc"; then
+            cat >> "$HOME/.zshrc" << 'EOF'
+
+# ============ Universal Modern Shell Configuration ============
+# 跨平台现代化Shell配置 - 自动生成，请勿手动修改此部分
+
+# 加载通用现代化配置
+if [ -f ~/.config/shell/universal-config.sh ]; then
+    source ~/.config/shell/universal-config.sh
+fi
+
+# ============ End Universal Configuration ============
+EOF
+            success "已将现代化配置添加到 .zshrc"
+        else
+            info ".zshrc 已包含现代化配置，跳过更新"
         fi
     else
         # Linux 使用 .bashrc

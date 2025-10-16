@@ -235,6 +235,14 @@ generate_mac_config() {
 # Modern Shell Configuration for Mac
 # Mac 现代化 Shell 配置
 
+# ============ Shell 类型检测 ============
+CURRENT_SHELL="bash"
+if [ -n "$ZSH_VERSION" ]; then
+    CURRENT_SHELL="zsh"
+elif [ -n "$BASH_VERSION" ]; then
+    CURRENT_SHELL="bash"
+fi
+
 # ============ Mac 特定配置 ============
 
 # Homebrew 环境配置
@@ -246,17 +254,22 @@ else
     eval "$(/usr/local/bin/brew shellenv)"
 fi
 
-# 启用别名扩展
-shopt -s expand_aliases
+# Bash 特定配置
+if [[ "$CURRENT_SHELL" == "bash" ]]; then
+    # 启用别名扩展
+    shopt -s expand_aliases
 
-# 历史配置优化
+    # 历史配置优化
+    shopt -s histappend
+    shopt -s checkwinsize
+    shopt -s histverify
+fi
+
+# 通用历史配置
 HISTSIZE=50000
 HISTFILESIZE=100000
 HISTCONTROL=ignoredups:ignorespace:erasedups
 HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "
-shopt -s histappend
-shopt -s checkwinsize
-shopt -s histverify
 
 # Mac 特定环境变量
 export CLICOLOR=1
@@ -294,22 +307,30 @@ export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git --exclu
 export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git --exclude node_modules --exclude .DS_Store'
 
-# 加载 FZF 键绑定（Mac Homebrew 路径）
-if [[ -f "$(brew --prefix)/opt/fzf/shell/key-bindings.bash" ]]; then
-    source "$(brew --prefix)/opt/fzf/shell/key-bindings.bash"
-fi
-
-if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.bash" ]]; then
-    source "$(brew --prefix)/opt/fzf/shell/completion.bash"
+# 加载 FZF 键绑定 (根据 shell 类型)
+if [[ "$CURRENT_SHELL" == "bash" ]]; then
+    if [[ -f "$(brew --prefix)/opt/fzf/shell/key-bindings.bash" ]]; then
+        source "$(brew --prefix)/opt/fzf/shell/key-bindings.bash"
+    fi
+    if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.bash" ]]; then
+        source "$(brew --prefix)/opt/fzf/shell/completion.bash"
+    fi
+elif [[ "$CURRENT_SHELL" == "zsh" ]]; then
+    if [[ -f "$(brew --prefix)/opt/fzf/shell/key-bindings.zsh" ]]; then
+        source "$(brew --prefix)/opt/fzf/shell/key-bindings.zsh"
+    fi
+    if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.zsh" ]]; then
+        source "$(brew --prefix)/opt/fzf/shell/completion.zsh"
+    fi
 fi
 
 # Zoxide - 智能目录跳转
 if command -v zoxide &> /dev/null; then
-    eval "$(zoxide init bash)"
+    eval "$(zoxide init $CURRENT_SHELL)"
 fi
 
-# McFly - 智能历史管理
-if command -v mcfly &> /dev/null; then
+# McFly - 智能历史管理 (仅 Bash 支持)
+if [[ "$CURRENT_SHELL" == "bash" ]] && command -v mcfly &> /dev/null; then
     eval "$(mcfly init bash)"
     export MCFLY_KEY_SCHEME=vim
     export MCFLY_FUZZY=2
@@ -319,7 +340,7 @@ fi
 
 # Starship - 美化终端提示符
 if command -v starship &> /dev/null; then
-    eval "$(starship init bash)"
+    eval "$(starship init $CURRENT_SHELL)"
 fi
 
 # ============ Mac 特定别名 ============
@@ -579,14 +600,12 @@ EOF
     success "Mac 现代化配置文件生成完成"
 }
 
-# 更新 .bash_profile
+# 更新 .bash_profile 和 .zshrc
 update_bash_profile() {
-    info "更新 .bash_profile 配置..."
+    info "更新 Shell 配置文件..."
 
-    # 确保 .bash_profile 存在
+    # 更新 .bash_profile
     touch "$HOME/.bash_profile"
-
-    # 检查是否已经添加了我们的配置
     if ! grep -q "Modern Shell Configuration for Mac" "$HOME/.bash_profile"; then
         cat >> "$HOME/.bash_profile" << 'EOF'
 
@@ -608,6 +627,26 @@ EOF
         success "已将现代化配置添加到 .bash_profile"
     else
         info ".bash_profile 已包含现代化配置，跳过更新"
+    fi
+
+    # 同时配置 .zshrc
+    touch "$HOME/.zshrc"
+    if ! grep -q "Modern Shell Configuration for Mac" "$HOME/.zshrc"; then
+        cat >> "$HOME/.zshrc" << 'EOF'
+
+# ============ Modern Shell Configuration for Mac ============
+# Mac 现代化 Shell 配置 - 自动生成，请勿手动修改此部分
+
+# 加载现代化配置
+if [ -f ~/.config/shell/modern-config-mac.sh ]; then
+    source ~/.config/shell/modern-config-mac.sh
+fi
+
+# ============ End Modern Configuration ============
+EOF
+        success "已将现代化配置添加到 .zshrc"
+    else
+        info ".zshrc 已包含现代化配置，跳过更新"
     fi
 }
 
