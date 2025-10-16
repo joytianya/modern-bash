@@ -214,7 +214,6 @@ install_mac_tools() {
 
     # 安装字体（可选）
     info "安装 Nerd 字体以获得更好的图标支持..."
-    brew tap homebrew/cask-fonts
     brew install --cask font-fira-code-nerd-font 2>/dev/null || warning "字体安装失败，不影响主要功能"
 }
 

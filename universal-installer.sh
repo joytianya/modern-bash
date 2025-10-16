@@ -475,7 +475,6 @@ install_with_brew() {
 
     # 安装字体
     info "安装 Nerd 字体..."
-    brew tap homebrew/cask-fonts
     brew install --cask font-fira-code-nerd-font 2>/dev/null || warning "字体安装失败，不影响主要功能"
 }
 
