@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Universal Modern Bash Configuration Installer
-# 跨平台现代化Bash配置一键安装脚本
+# Universal Modern Shell Configuration Installer
+# 跨平台现代化 Shell 配置一键安装脚本
 # 支持: Linux (Ubuntu/Debian, CentOS/RHEL, Arch) 和 macOS
 # Author: zxw
 # Version: 2.0.0 (Universal)
@@ -248,7 +248,7 @@ create_backup() {
 
     # 备份配置文件
     local files_to_backup
-    if [[ "$OS" == "macos" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]]; then
         files_to_backup=(".bashrc" ".bash_aliases" ".bash_profile" ".profile" ".inputrc" ".dircolors" ".zshrc")
     else
         files_to_backup=(".bashrc" ".bash_aliases" ".bash_profile" ".profile" ".inputrc" ".dircolors")
@@ -320,6 +320,24 @@ install_universal_tools() {
 
     # 安装跨平台工具
     install_cross_platform_tools
+    normalize_linux_tool_names
+}
+
+# Debian/Ubuntu 上部分工具的二进制名和通用命令名不同。
+normalize_linux_tool_names() {
+    [[ "$OS_TYPE" == "linux" ]] || return 0
+
+    mkdir -p "$HOME/.local/bin"
+
+    if ! command -v bat >/dev/null 2>&1 && command -v batcat >/dev/null 2>&1; then
+        ln -sf "$(command -v batcat)" "$HOME/.local/bin/bat"
+        success "已创建 bat -> batcat 兼容链接"
+    fi
+
+    if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
+        ln -sf "$(command -v fdfind)" "$HOME/.local/bin/fd"
+        success "已创建 fd -> fdfind 兼容链接"
+    fi
 }
 
 # APT 安装 (Ubuntu/Debian)
@@ -578,7 +596,7 @@ install_cross_platform_tools() {
     # 安装 Starship
     if ! command -v starship &> /dev/null; then
         info "安装 Starship 终端提示符..."
-        if [[ "$OS" == "macos" ]]; then
+        if [[ "$OS_TYPE" == "macos" ]]; then
             brew install starship
         else
             mkdir -p "$HOME/.local/bin"
@@ -593,7 +611,7 @@ install_cross_platform_tools() {
     # 安装 McFly
     if ! command -v mcfly &> /dev/null; then
         info "安装 McFly 智能历史管理..."
-        if [[ "$OS" == "macos" ]]; then
+        if [[ "$OS_TYPE" == "macos" ]]; then
             if brew install mcfly 2>/dev/null; then
                 success "McFly 安装成功"
             else
@@ -652,8 +670,9 @@ generate_universal_config() {
     mkdir -p "$CONFIG_DIR"
 
     if [ -f "$CONFIG_DIR/universal-config.sh" ]; then
-        info "通用配置文件已存在，跳过生成"
-        return 0
+        local config_backup="$CONFIG_DIR/universal-config.sh.bak-$(date +%Y%m%d_%H%M%S)"
+        cp "$CONFIG_DIR/universal-config.sh" "$config_backup"
+        info "已备份现有通用配置: $config_backup"
     fi
 
     cat > "$CONFIG_DIR/universal-config.sh" << 'EOF'
@@ -814,7 +833,7 @@ fi
 
 # Starship - 美化终端提示符
 if command -v starship &> /dev/null; then
-    eval "$(starship init $CURRENT_SHELL)"
+    eval "$(starship init "$CURRENT_SHELL")"
 fi
 
 # ============ 智能别名系统 ============
@@ -842,7 +861,7 @@ elif command -v exa &> /dev/null; then
     alias lh='exa -la --icons --group-directories-first --git'
     alias lta='exa --tree --level=3 --icons'
 else
-    if [[ "$OS" == "macos" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]]; then
         alias ls='ls -G'
         alias ll='ls -alFG'
         alias la='ls -AG'
@@ -1043,7 +1062,7 @@ dirsize() {
 # 端口检查
 port() {
     if [ -n "$1" ]; then
-        if [[ "$OS" == "macos" ]]; then
+        if [[ "$OS_TYPE" == "macos" ]]; then
             lsof -i ":$1"
         else
             netstat -tulpn | grep ":$1"
@@ -1068,7 +1087,7 @@ serve() {
 # 系统信息
 sysinfo() {
     echo -e "\033[0;32m🖥️  系统信息\033[0m"
-    if [[ "$OS" == "macos" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]]; then
         echo "操作系统: $(sw_vers -productName) $(sw_vers -productVersion)"
         echo "处理器: $(sysctl -n machdep.cpu.brand_string)"
         echo "内存: $(sysctl -n hw.memsize | awk '{print $1/1024/1024/1024 " GB"}')"
@@ -1090,7 +1109,7 @@ show_tools() {
     echo -e "\033[0;34m🔍 文件搜索:\033[0m Ctrl+T (文件), Alt+C (目录), Ctrl+R (历史)"
     echo -e "\033[0;34m📋 文件查看:\033[0m ll (详细列表), cat (语法高亮), grep (高级搜索)"
     echo -e "\033[0;34m⚡ 实用函数:\033[0m mkcd, extract, ff (查找文件), sysinfo, backup"
-    if [[ "$OS" == "macos" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]]; then
         echo -e "\033[0;35m🍎 Mac 特定:\033[0m flushdns, showfiles, hidefiles, brewup, battery"
     fi
     echo -e "\033[0;34m🎨 终端美化:\033[0m Starship 提示符, 彩色输出"
@@ -1104,35 +1123,32 @@ fi
 
 # ============ 补全增强 ============
 
-# 根据系统加载补全
-if [[ "$OS_TYPE" == "macos" ]]; then
-    # Homebrew bash 补全
-    if [[ -r "$(brew --prefix)/etc/profile.d/bash_completion.sh" ]]; then
-        source "$(brew --prefix)/etc/profile.d/bash_completion.sh"
+# Bash 补全增强。不要在 zsh 中加载 bash_completion/git-completion.bash。
+if [[ "$CURRENT_SHELL" == "bash" ]]; then
+    if [[ "$OS_TYPE" == "macos" ]]; then
+        if command -v brew &> /dev/null && [[ -r "$(brew --prefix)/etc/profile.d/bash_completion.sh" ]]; then
+            source "$(brew --prefix)/etc/profile.d/bash_completion.sh"
+        fi
+
+        if command -v brew &> /dev/null && [[ -f "$(brew --prefix)/etc/bash_completion.d/git-completion.bash" ]]; then
+            source "$(brew --prefix)/etc/bash_completion.d/git-completion.bash"
+        fi
+    else
+        if [ -f /etc/bash_completion ]; then
+            source /etc/bash_completion
+        fi
+
+        if [ -f ~/.git-completion.bash ]; then
+            source ~/.git-completion.bash
+        fi
     fi
 
-    # Git 补全
-    if [ -f "$(brew --prefix)/etc/bash_completion.d/git-completion.bash" ]; then
-        source "$(brew --prefix)/etc/bash_completion.d/git-completion.bash"
-    fi
-else
-    # Linux bash 补全
-    if [ -f /etc/bash_completion ]; then
-        source /etc/bash_completion
-    fi
-
-    # Git 补全
-    if [ -f ~/.git-completion.bash ]; then
-        source ~/.git-completion.bash
-    fi
+    bind "set show-all-if-ambiguous on" 2>/dev/null
+    bind "set show-all-if-unmodified on" 2>/dev/null
+    bind "set completion-ignore-case on" 2>/dev/null
+    bind "set completion-query-items 200" 2>/dev/null
+    bind "set page-completions off" 2>/dev/null
 fi
-
-# 设置补全选项
-bind "set show-all-if-ambiguous on" 2>/dev/null
-bind "set show-all-if-unmodified on" 2>/dev/null
-bind "set completion-ignore-case on" 2>/dev/null
-bind "set completion-query-items 200" 2>/dev/null
-bind "set page-completions off" 2>/dev/null
 
 # ============ 性能优化 ============
 
@@ -1180,25 +1196,9 @@ EOF
             info ".bash_profile 已包含现代化配置，跳过更新"
         fi
 
-        # 同时配置 .zshrc
-        touch "$HOME/.zshrc"
-        if ! grep -q "Universal Modern Shell Configuration" "$HOME/.zshrc"; then
-            cat >> "$HOME/.zshrc" << 'EOF'
-
-# ============ Universal Modern Shell Configuration ============
-# 跨平台现代化Shell配置 - 自动生成，请勿手动修改此部分
-
-# 加载通用现代化配置
-if [ -f ~/.config/shell/universal-config.sh ]; then
-    source ~/.config/shell/universal-config.sh
-fi
-
-# ============ End Universal Configuration ============
-EOF
-            success "已将现代化配置添加到 .zshrc"
-        else
-            info ".zshrc 已包含现代化配置，跳过更新"
-        fi
+        # 不把 Universal 配置写入 .zshrc。zsh 只启用 Starship，避免
+        # Oh My Zsh、compinit、bash_completion 之间互相覆盖或报错。
+        info "跳过 .zshrc Universal 配置写入，后续仅启用 zsh Starship"
     else
         # Linux 使用 .bashrc
         touch "$HOME/.bashrc"
@@ -1222,14 +1222,108 @@ EOF
     fi
 }
 
+# 清理早期版本错误写入 .zshrc 的 Universal 块。
+cleanup_zsh_universal_block() {
+    local zshrc="$HOME/.zshrc"
+    local tmp
+
+    [[ -f "$zshrc" ]] || return 0
+
+    if ! grep -q "Universal Modern Shell Configuration" "$zshrc"; then
+        info ".zshrc 未发现旧 Universal 配置块，跳过清理"
+        return 0
+    fi
+
+    cp "$zshrc" "$BACKUP_DIR/.zshrc.before-universal-cleanup"
+    tmp="$(mktemp)"
+    awk '
+        $0 == "# ============ Universal Modern Shell Configuration ============" { skip=1; next }
+        $0 == "# ============ End Universal Configuration ============" { skip=0; next }
+        !skip { print }
+    ' "$zshrc" > "$tmp"
+    mv "$tmp" "$zshrc"
+    success "已从 .zshrc 移除旧 Universal 配置块"
+}
+
+# 在 zsh 末尾启用 Starship，让它覆盖 Oh My Zsh 主题。
+enable_starship_zsh() {
+    local zshrc="$HOME/.zshrc"
+    local tmp
+    local start="# >>> starship-zsh >>>"
+    local end="# <<< starship-zsh <<<"
+
+    [[ -f "$zshrc" ]] || return 0
+
+    if ! command -v starship >/dev/null 2>&1; then
+        warning "未找到 starship，跳过 zsh Starship 初始化"
+        return 0
+    fi
+
+    cp "$zshrc" "$BACKUP_DIR/.zshrc.before-starship-zsh"
+    tmp="$(mktemp)"
+    awk -v start="$start" -v end="$end" '
+        $0 == start { skip=1; next }
+        $0 == end { skip=0; next }
+        !skip { print }
+    ' "$zshrc" > "$tmp"
+    mv "$tmp" "$zshrc"
+
+    cat >> "$zshrc" << EOF
+
+$start
+# Starship prompt. Keep this near the end so it overrides Oh My Zsh themes.
+if command -v starship >/dev/null 2>&1; then
+  eval "\$(starship init zsh)"
+fi
+$end
+EOF
+
+    success "已在 .zshrc 末尾启用 Starship"
+}
+
 # 生成通用Starship配置
 generate_universal_starship_config() {
     info "生成跨平台Starship配置..."
 
     mkdir -p "$HOME/.config"
 
+    local starship_config="$HOME/.config/starship.toml"
+    local starship_format
+    starship_format='format = """
+[╭─](bold blue)$os$username[@](bold blue)$hostname[ in ](bold blue)$directory$git_branch$git_status$nodejs$python$rust$golang$java$docker_context$package$cmd_duration
+[╰─](bold blue)$character"""'
+
     if [ -f "$HOME/.config/starship.toml" ]; then
-        info "Starship配置文件已存在，跳过生成"
+        local starship_backup="$starship_config.bak-$(date +%Y%m%d_%H%M%S)"
+        cp "$starship_config" "$starship_backup"
+        info "已备份现有 Starship 配置: $starship_backup"
+
+        if grep -q '^format[[:space:]]*=[[:space:]]*"""' "$starship_config"; then
+            awk -v replacement="$starship_format" '
+                BEGIN { skipping=0 }
+                /^format[[:space:]]*=[[:space:]]*"""/ {
+                    print replacement
+                    if ($0 ~ /"""[[:space:]]*$/ && $0 !~ /^format[[:space:]]*=[[:space:]]*"""[[:space:]]*$/) {
+                        skipping=0
+                    } else {
+                        skipping=1
+                    }
+                    next
+                }
+                skipping {
+                    if ($0 ~ /"""[[:space:]]*$/) skipping=0
+                    next
+                }
+                { print }
+            ' "$starship_config" > "${starship_config}.tmp" && mv "${starship_config}.tmp" "$starship_config"
+            success "已更新 Starship 两行提示符 format"
+        else
+            {
+                printf '%s\n\n' "$starship_format"
+                cat "$starship_config"
+            } > "${starship_config}.tmp" && mv "${starship_config}.tmp" "$starship_config"
+            success "已追加 Starship 两行提示符 format"
+        fi
         return 0
     fi
 
@@ -1237,22 +1331,7 @@ generate_universal_starship_config() {
 # Starship 跨平台配置文件
 
 format = """
-[╭─user───❯](bold blue) $os\
-$username\
-[@](bold blue)\
-$hostname\
-[ in ](bold blue)\
-$directory\
-$git_branch\
-$git_status\
-$nodejs\
-$python\
-$rust\
-$golang\
-$java\
-$docker_context\
-$package\
-$cmd_duration
+[╭─](bold blue)$os$username[@](bold blue)$hostname[ in ](bold blue)$directory$git_branch$git_status$nodejs$python$rust$golang$java$docker_context$package$cmd_duration
 [╰─](bold blue)$character"""
 
 [os]
@@ -1369,7 +1448,7 @@ set_permissions() {
 # 显示安装结果
 show_result() {
     success "=========================================="
-    success "🎉 跨平台现代化Bash配置安装完成！"
+    success "🎉 跨平台现代化 Shell 配置安装完成！"
     success "=========================================="
     echo
     info "检测到的系统: $OS ($PACKAGE_MANAGER)"
@@ -1407,7 +1486,9 @@ show_result() {
     echo
     warning "请运行以下命令应用新配置："
 
-    if [[ "$OS" == "macos" ]]; then
+    if [[ -n "${ZSH_VERSION:-}" ]] || [[ -f "$HOME/.zshrc" ]]; then
+        echo "exec zsh -l"
+    elif [[ "$OS" == "macos" ]]; then
         echo "source ~/.bash_profile"
     else
         echo "source ~/.bashrc"
@@ -1514,7 +1595,7 @@ test_compatibility() {
 
 # 显示帮助信息
 show_help() {
-    echo -e "${BLUE}跨平台现代化Bash配置安装脚本${NC}"
+    echo -e "${BLUE}跨平台现代化 Shell 配置安装脚本${NC}"
     echo
     echo -e "${GREEN}支持的系统:${NC}"
     echo "  • macOS (Apple Silicon & Intel)"
@@ -1530,13 +1611,17 @@ show_help() {
     echo "  install     - 安装现代化配置 (默认)"
     echo "  uninstall   - 卸载并恢复原配置"
     echo "  backup      - 仅创建当前配置备份"
+    echo "  starship    - 仅配置 Starship 两行提示符并启用 zsh"
+    echo "  fix-zsh     - 仅清理旧版 zsh 错误配置并启用 Starship"
+    echo "  hostname    - 可选：将 hostname 设置为外网 IP"
     echo "  test        - 运行兼容性测试"
     echo "  help        - 显示此帮助信息"
     echo
     echo -e "${GREEN}特性:${NC}"
     echo "  • 🔍 智能系统检测"
     echo "  • 📦 跨平台包管理"
-    echo "  • 🎨 统一美化体验"
+    echo "  • 🎨 Starship 两行提示符"
+    echo "  • 🧹 自动清理旧版 zsh 错误配置块"
     echo "  • ⚡ 现代化工具集成"
     echo "  • 🛡️ 安全备份机制"
 }
@@ -1546,8 +1631,8 @@ main() {
     clear
     echo -e "${BLUE}"
     echo "=========================================="
-    echo "    跨平台现代化Bash配置安装脚本"
-    echo "  Universal Modern Bash Configuration"
+    echo "    跨平台现代化 Shell 配置安装脚本"
+    echo "  Universal Modern Shell Configuration"
     echo "    Version 2.0.0 (Universal)"
     echo "=========================================="
     echo -e "${NC}"
@@ -1556,13 +1641,14 @@ main() {
     case "${1:-install}" in
         "install")
             detect_system
-            setup_hostname_as_ip
             check_dependencies
             create_backup
             install_universal_tools
             generate_universal_config
             update_shell_config
             generate_universal_starship_config
+            cleanup_zsh_universal_block
+            enable_starship_zsh
             set_permissions
             show_result
             ;;
@@ -1571,8 +1657,27 @@ main() {
             uninstall
             ;;
         "backup")
+            detect_system
             create_backup
             success "配置备份完成: $BACKUP_DIR"
+            ;;
+        "starship")
+            detect_system
+            create_backup
+            generate_universal_starship_config
+            enable_starship_zsh
+            success "Starship 配置完成"
+            ;;
+        "fix-zsh")
+            detect_system
+            create_backup
+            cleanup_zsh_universal_block
+            enable_starship_zsh
+            success "zsh 启动配置修复完成"
+            ;;
+        "hostname")
+            detect_system
+            setup_hostname_as_ip
             ;;
         "test")
             detect_system
